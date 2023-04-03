@@ -1,5 +1,16 @@
-const app = require('./app')
+const app = require("./app");
 
-app.listen(3001, () => {
-  console.log("Server running. Use our API on port: 3001")
-})
+require("dotenv").config();
+const { connectMongo } = require("./db/connection");
+
+const PORT = process.env.PORT;
+
+const start = async () => {
+  await connectMongo();
+
+  app.listen(PORT, () => {
+    console.log(`Server running. Use our API on port: ${PORT}`);
+  });
+};
+
+start();

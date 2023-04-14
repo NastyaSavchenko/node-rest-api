@@ -9,9 +9,16 @@ const {
 
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const gravatar = require("gravatar");
+const path = require("path");
+const fs = require("fs/promises");
+
 const { User } = require("../db/userModel");
+const { avatarSize } = require("../helpers/avatarHelpers");
 
 const { SECRET_KEY } = process.env;
+
+const avatarsDir = path.join(__dirname, "../", "public", "avatars");
 
 const registrationController = async (req, res, next) => {
   try {
@@ -23,7 +30,9 @@ const registrationController = async (req, res, next) => {
       });
     }
 
-    const newUser = await registerUser(email, password);
+    const avatarURL = gravatar.url(email);
+
+    const newUser = await registerUser(email, password, avatarURL);
     return res.status(201).json({
       user: newUser,
     });
@@ -106,10 +115,38 @@ const updateSubscriptionController = async (req, res, next) => {
   }
 };
 
+const updateAvatarController = async (req, res, next) => {
+  try {
+    const { _id } = req.user;
+    const { path: tmpUpload, originalname } = req.file;
+    const resultUpload = path.join(avatarsDir, originalname);
+
+    if (!req.file) {
+      return res.status(401).json({ message: "Please upload a file" });
+    }
+
+    const filename = `${_id}_${originalname}`;
+    await fs.rename(tmpUpload, resultUpload);
+    await avatarSize(resultUpload);
+
+    const avatarURL = path.join("avatars", filename);
+
+    const updateUserAvatar = await User.findByIdAndUpdate(_id, { avatarURL });
+
+    if (!updateUserAvatar) {
+      return res.status(401).json({ message: "Not authorized" });
+    }
+    return res.status(200).json({ avatarURL });
+  } catch (error) {
+    next(error.message);
+  }
+};
+
 module.exports = {
   registrationController,
   loginController,
   logoutController,
   getCurrentUserController,
   updateSubscriptionController,
+  updateAvatarController,
 };

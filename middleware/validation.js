@@ -78,6 +78,24 @@ module.exports = {
     next();
   },
 
+  emailValidation: (req, res, next) => {
+    const schema = Joi.object({
+      email: Joi.string()
+        // eslint-disable-next-line no-useless-escape
+        .pattern(/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/)
+        .required(),
+    });
+
+    const validationResult = schema.validate(req.body);
+    if (validationResult.error) {
+      return res
+        .status(400)
+        .json({ message: validationResult.error.details[0].message });
+    }
+
+    next();
+  },
+
   loginValidation: (req, res, next) => {
     const schema = Joi.object({
       email: Joi.string().required(),

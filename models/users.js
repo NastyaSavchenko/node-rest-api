@@ -1,10 +1,11 @@
 const { User } = require("../db/userModel");
 
-const registerUser = async (email, password, avatarURL) => {
+const registerUser = async (email, password, avatarURL, verificationToken) => {
   const user = await User.create({
     email,
     password,
     avatarURL,
+    verificationToken,
   });
   return user.save();
 };
@@ -40,6 +41,13 @@ const updateSubscription = async (subscription, owner) => {
   });
 };
 
+const verifyEmail = async (_id) => {
+  return User.findByIdAndUpdate(_id, {
+    $set: { verify: true, verificationToken: "" },
+    runValidators: true,
+  });
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -47,5 +55,5 @@ module.exports = {
   saveToken,
   removeToken,
   updateSubscription,
+  verifyEmail,
 };
-

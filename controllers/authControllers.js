@@ -5,6 +5,7 @@ const {
   saveToken,
   removeToken,
   updateSubscription,
+  verifyEmail,
 } = require("../models/users");
 
 const bcrypt = require("bcrypt");
@@ -12,11 +13,13 @@ const jwt = require("jsonwebtoken");
 const gravatar = require("gravatar");
 const path = require("path");
 const fs = require("fs/promises");
+const { v4: uuidv4 } = require("uuid");
 
 const { User } = require("../db/userModel");
 const { avatarSize } = require("../helpers/avatarHelpers");
+const { sendEmail } = require("../helpers/sendEmail");
 
-const { SECRET_KEY } = process.env;
+const { SECRET_KEY, BASE_URL } = process.env;
 
 const avatarsDir = path.join(__dirname, "../", "public", "avatars");
 
@@ -31,11 +34,82 @@ const registrationController = async (req, res, next) => {
     }
 
     const avatarURL = gravatar.url(email);
+    const verificationToken = uuidv4();
 
-    const newUser = await registerUser(email, password, avatarURL);
+    const newUser = await registerUser(
+      email,
+      password,
+      avatarURL,
+      verificationToken
+    );
+
+    const data = {
+      to: email,
+      subject: "Varify email",
+      html: `<a href="${BASE_URL}/api/auth/users/verify/${verificationToken}" target="_blank">Click for verify your email</a>`,
+    };
+
+    await sendEmail(data);
+
     return res.status(201).json({
       user: newUser,
     });
+  } catch (error) {
+    next(error.message);
+  }
+};
+
+const verifyEmailController = async (req, res, next) => {
+  try {
+    const { verificationToken } = req.params;
+    const user = await User.findOne({ verificationToken });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    if (user.verify) {
+      return res.status(200).json({ message: "User already verified" });
+    }
+
+    await verifyEmail(user._id);
+    return res.status(200).json({ message: "Verification successful" });
+  } catch (error) {
+    next(error.message);
+  }
+};
+
+const resendVerifyEmailController = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Missing required field email" });
+    }
+
+    const user = await loginUser(email);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    if (user.verify) {
+      return res
+        .status(400)
+        .json({ message: "Verification has already been passed" });
+    }
+
+    const data = {
+      to: email,
+      subject: "Varify email",
+      html: `<a href="${BASE_URL}/api/auth/users/verify/${user.verificationToken}" target="_blank">Click for verify your email</a>`,
+    };
+
+    await sendEmail(data);
+    return res.status(200).json({ message: "Verification email sent" });
   } catch (error) {
     next(error.message);
   }
@@ -45,6 +119,10 @@ const loginController = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     const user = await loginUser(email);
+
+    if (!user.verify) {
+      return res.status(401).json({ message: "Email not verified" });
+    }
 
     if (!user) {
       return res.status(401).json({ message: "Email or password is wrong" });
@@ -149,4 +227,6 @@ module.exports = {
   getCurrentUserController,
   updateSubscriptionController,
   updateAvatarController,
+  verifyEmailController,
+  resendVerifyEmailController,
 };
